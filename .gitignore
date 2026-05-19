@@ -1,0 +1,52 @@
+# Raw datasets and generated analysis outputs
+data/
+artifacts/
+
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Python caches and build products
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Jupyter local state
+.ipynb_checkpoints/
+.jupyter/
+
+# Large local intermediates
+*.parquet
+*.feather
+*.pkl
+*.pickle
+*.joblib
+
+# Compressed local data drops
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bz2
+*.7z
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local assistant/tooling state
+.agents/
+.codex/

@@ -1,0 +1,21 @@
+[project]
+name = "support-aware-reserve-policy-selection"
+version = "0.1.0"
+description = "Notebook-first empirical code for support-aware offline reserve-policy selection in advertising marketplaces."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "pandas",
+  "scipy",
+  "matplotlib",
+  "seaborn",
+  "pyarrow",
+  "jupyter",
+  "ipykernel",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
