@@ -9,8 +9,6 @@
 
 ![Support-aware offline decision framework](docs/info.png)
 
-![Support-aware reserve-policy workflow](docs/support_aware_decision_framework.png)
-
 This repository contains the notebook-first empirical code for the paper. The workflow is
 scoped to the experiments described in Section 5 and Appendix B. The notebooks are the
 public face of the analysis, and `src/` contains reusable code for data access, panel
