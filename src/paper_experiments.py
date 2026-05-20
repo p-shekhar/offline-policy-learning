@@ -12,11 +12,18 @@ from figures import (
     save_appendix_decision_robustness_figure,
     save_appendix_replay_diagnostics,
     save_appendix_support_pair_figure,
+    save_q_localized_selection_figure,
+    save_q_localized_transfer_figure,
     save_shortlist_construction_figure,
     save_threshold_resolution_figure,
     save_validation_readiness_figure,
 )
 from ipinyou_panel import IpinYouPanelBuilder, summarize_panel_directory
+from localized_replay import (
+    bootstrap_q_localized_winners,
+    q_localized_replay_panel,
+    summarize_bootstrap_q_localized_winners,
+)
 from lower_bounds import (
     assign_decision_labels,
     eliminate_dominated_policies,
@@ -46,6 +53,7 @@ SEASON2_PANEL = "ipinyou_season2"
 SEASON3_PANEL = "ipinyou_season3"
 MAIN_THRESHOLD_RADII = [1, 2, 5, 10, 20, 50, 100, 200]
 APPENDIX_THRESHOLD_RADII = [1, 2, 3, 5, 7.5, 10, 15, 20, 30, 50, 75, 100, 150, 200]
+Q_LOCALIZED_VALUES = [0.01, 0.025, 0.05, 0.10, 0.20]
 
 
 def run_data_audit(paths: ProjectPaths, progress: ProgressLogger | None = None) -> dict[str, pd.DataFrame]:
@@ -724,4 +732,197 @@ def run_appendix_b_diagnostics(
         "appendix_replay_figure": replay_fig,
         "appendix_support_figure": support_fig,
         "appendix_decision_figure": decision_fig,
+    }
+
+
+def run_q_localized_policy_selection(
+    paths: ProjectPaths,
+    config: ExperimentConfig,
+    progress: ProgressLogger | None = None,
+) -> dict[str, pd.DataFrame | Path]:
+    """Run q-localized policy selection and out-of-time transfer diagnostics."""
+
+    paths.ensure()
+    logger = progress or ProgressLogger(enabled=False)
+    logger.step("Running q-localized policy-selection diagnostics.")
+    catalog = season2_catalog(paths)
+
+    season2_effects, _ = _read_or_replay(
+        paths.panel_dir / SEASON2_PANEL,
+        catalog,
+        config,
+        paths,
+        "02_season2",
+        logger,
+    )
+    season3_effects, _ = _read_or_replay(
+        paths.panel_dir / SEASON3_PANEL,
+        catalog,
+        config,
+        paths,
+        "04_season3",
+        logger,
+    )
+    season2_localized, season2_localized_daily = q_localized_replay_panel(
+        paths.panel_dir / SEASON2_PANEL,
+        catalog,
+        Q_LOCALIZED_VALUES,
+        config,
+        logger,
+    )
+    season3_localized, season3_localized_daily = q_localized_replay_panel(
+        paths.panel_dir / SEASON3_PANEL,
+        catalog,
+        Q_LOCALIZED_VALUES,
+        config,
+        logger,
+    )
+
+    full_rank = (
+        season2_effects.query("policy_id != @BASELINE_POLICY_ID")
+        .sort_values("pct_delta_yield_per_opportunity_vs_baseline", ascending=False)
+        .assign(season2_full_replay_rank=lambda frame: np.arange(1, len(frame) + 1))
+    )
+    full_rank_cols = [
+        "policy_id",
+        "season2_full_replay_rank",
+        "pct_delta_yield_per_opportunity_vs_baseline",
+    ]
+    ranking = season2_localized.merge(full_rank[full_rank_cols], on="policy_id", how="left")
+    ranking = ranking.rename(
+        columns={
+            "pct_delta_yield_per_opportunity_vs_baseline": "season2_full_replay_lift",
+        }
+    )
+    ranking = ranking.sort_values(["q", "localized_rank"]).reset_index(drop=True)
+
+    top_sequence = (
+        ranking.sort_values(["q", "localized_rank"])
+        .groupby("q", as_index=False)
+        .head(5)
+        .copy()
+    )
+    full_replay_leader = str(full_rank.iloc[0]["policy_id"])
+    top_by_q = ranking.query("localized_rank == 1").copy()
+    top_by_q["full_replay_leader_policy_id"] = full_replay_leader
+    top_by_q["matches_full_replay_leader"] = top_by_q["policy_id"].eq(full_replay_leader)
+
+    bootstrap = bootstrap_q_localized_winners(
+        season2_localized_daily,
+        iterations=config.bootstrap_iterations,
+        seed=config.random_seed,
+    )
+    bootstrap_summary = summarize_bootstrap_q_localized_winners(bootstrap)
+
+    season3_full = season3_effects[
+        [
+            "policy_id",
+            "pct_delta_yield_per_opportunity_vs_baseline",
+            "retained_impression_share",
+        ]
+    ].rename(
+        columns={
+            "pct_delta_yield_per_opportunity_vs_baseline": "season3_full_replay_lift",
+            "retained_impression_share": "season3_retained_impression_share",
+        }
+    )
+    season3_local = season3_localized[
+        ["q", "policy_id", "localized_boundary_lift", "localized_rank"]
+    ].rename(
+        columns={
+            "localized_boundary_lift": "season3_localized_boundary_lift",
+            "localized_rank": "season3_localized_rank",
+        }
+    )
+    transfer = (
+        top_by_q[
+            [
+                "q",
+                "policy_id",
+                "policy_number",
+                "policy_label",
+                "localized_boundary_lift",
+                "localized_rank",
+                "season2_full_replay_lift",
+                "season2_full_replay_rank",
+                "matches_full_replay_leader",
+            ]
+        ]
+        .rename(
+            columns={
+                "localized_boundary_lift": "season2_localized_boundary_lift",
+                "localized_rank": "season2_localized_rank",
+            }
+        )
+        .merge(season3_full, on="policy_id", how="left")
+        .merge(season3_local, on=["q", "policy_id"], how="left")
+    )
+    transfer["selection_source"] = "q-localized winner"
+
+    comparison = (
+        top_by_q[
+            [
+                "q",
+                "policy_id",
+                "policy_number",
+                "policy_label",
+                "localized_boundary_lift",
+                "season2_full_replay_lift",
+                "season2_full_replay_rank",
+                "matches_full_replay_leader",
+            ]
+        ]
+        .rename(
+            columns={
+                "policy_id": "q_localized_winner_policy_id",
+                "policy_number": "q_localized_winner_policy_number",
+                "policy_label": "q_localized_winner_policy_label",
+                "localized_boundary_lift": "q_localized_winner_score",
+                "season2_full_replay_lift": "q_localized_winner_full_replay_lift",
+                "season2_full_replay_rank": "q_localized_winner_full_replay_rank",
+            }
+        )
+    )
+    comparison["full_replay_leader_policy_id"] = full_replay_leader
+    comparison["full_replay_leader_policy_number"] = str(full_rank.iloc[0]["policy_number"])
+    comparison["full_replay_leader_policy_label"] = str(full_rank.iloc[0]["policy_label"])
+    comparison["full_replay_leader_lift"] = float(
+        full_rank.iloc[0]["pct_delta_yield_per_opportunity_vs_baseline"]
+    )
+
+    write_table(ranking, paths.table_dir / "06_q_localized_policy_ranking.csv")
+    write_table(top_sequence, paths.table_dir / "06_q_localized_top_sequence.csv")
+    write_table(comparison, paths.table_dir / "06_q_localized_vs_full_replay_comparison.csv")
+    write_table(bootstrap, paths.table_dir / "06_q_localized_bootstrap_draws.csv")
+    write_table(bootstrap_summary, paths.table_dir / "06_q_localized_bootstrap_winner_frequency.csv")
+    write_table(transfer, paths.table_dir / "06_q_localized_season3_transfer.csv")
+    write_table(season2_localized_daily, paths.metadata_dir / "06_q_localized_season2_daily_scores.csv")
+    write_table(season3_localized_daily, paths.metadata_dir / "06_q_localized_season3_daily_scores.csv")
+
+    selected_policy_ids = list(
+        dict.fromkeys(
+            [
+                *top_sequence.query("localized_rank <= 3")["policy_id"].astype(str).tolist(),
+                *bootstrap_summary.groupby("q").head(2)["selected_policy_id"].astype(str).tolist(),
+                full_replay_leader,
+            ]
+        )
+    )
+    selection_fig = paths.figure_dir / "06_q_localized_selection_stability.png"
+    transfer_fig = paths.figure_dir / "06_q_localized_season3_transfer.png"
+    save_q_localized_selection_figure(ranking, bootstrap_summary, selection_fig, selected_policy_ids)
+    save_q_localized_transfer_figure(transfer, transfer_fig)
+
+    logger.done("q-localized policy-selection artifacts are ready.")
+    return {
+        "ranking": ranking,
+        "top_sequence": top_sequence,
+        "comparison": comparison,
+        "bootstrap_draws": bootstrap,
+        "bootstrap_summary": bootstrap_summary,
+        "season3_transfer": transfer,
+        "season2_daily_scores": season2_localized_daily,
+        "season3_daily_scores": season3_localized_daily,
+        "selection_figure": selection_fig,
+        "transfer_figure": transfer_fig,
     }

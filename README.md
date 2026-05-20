@@ -10,10 +10,11 @@
 ![Support-aware offline decision framework](docs/info.png)
 
 This repository contains the notebook-first empirical code for the paper. The workflow is
-scoped to the experiments described in Section 5 and Appendix B. The notebooks are the
-public face of the analysis, and `src/` contains reusable code for data access, panel
-construction, reserve-policy replay, lower-bound ranking, support diagnostics, segment
-safety, out-of-time transfer, and robustness summaries.
+scoped to the experiments described in Section 5, Appendix B, and the additional
+q-localized replay diagnostic. The notebooks are the public face of the analysis, and
+`src/` contains reusable code for data access, panel construction, reserve-policy replay,
+lower-bound ranking, support diagnostics, localized replay selection, segment safety,
+out-of-time transfer, and robustness summaries.
 
 Generated outputs are written to `artifacts/` and are ignored by Git. The raw iPinYou
 archive is also ignored and should be supplied locally.
@@ -57,6 +58,7 @@ directly to Section 5 and Appendix B.
 | 03 | `03_support_localized_threshold_resolution.ipynb` | Section 5.2 | Boundary support sweep, support-adjusted lower bounds, threshold certification counts |
 | 04 | `04_validation_readiness_transfer_segment_safety.ipynb` | Section 5.3 | Frozen season-three transfer, segment-level non-harm diagnostics |
 | 05 | `05_appendix_b_robustness_and_diagnostics.ipynb` | Appendix B | Replay concentration, threshold support, shortlist robustness, subgroup safety, transfer stress tests, implementation details |
+| 06 | `06_q_localized_policy_selection.ipynb` | Additional diagnostic | q-localized policy rankings, comparison with full replay, day-bootstrap stability, season-three transfer of localized selections |
 
 The code intentionally does not provide a one-shot pipeline command. The reproducible unit
 is the ordered notebook workflow, with reusable implementation details kept in `src/`.

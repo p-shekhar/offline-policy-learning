@@ -469,6 +469,97 @@ def save_appendix_decision_robustness_figure(
     plt.close(fig)
 
 
+def save_q_localized_selection_figure(
+    ranking: pd.DataFrame,
+    bootstrap_summary: pd.DataFrame,
+    out: Path,
+    policy_ids: list[str],
+) -> None:
+    """Save q-localized ranking and resampling stability diagnostics."""
+
+    set_style()
+    fig, axes = plt.subplots(1, 2, figsize=(14.2, 5.2))
+    plot = ranking[ranking["policy_id"].isin(policy_ids)].copy()
+    plot["q_percent"] = 100.0 * plot["q"]
+    sns.lineplot(
+        data=plot,
+        x="q_percent",
+        y="localized_boundary_lift",
+        hue="policy_number",
+        style="policy_number",
+        markers=True,
+        dashes=False,
+        ax=axes[0],
+    )
+    axes[0].axhline(0, color="black", linewidth=0.8, linestyle="--")
+    axes[0].set_title("(a) q-localized replay score")
+    axes[0].set_xlabel("Boundary evidence fraction q (%)")
+    axes[0].set_ylabel("Localized boundary lift")
+    axes[0].legend(title="Policy", frameon=True, fontsize=9, title_fontsize=10)
+
+    boot = bootstrap_summary[bootstrap_summary["selected_policy_id"].isin(policy_ids)].copy()
+    boot["q_percent"] = 100.0 * boot["q"]
+    sns.barplot(
+        data=boot,
+        x="q_percent",
+        y="selection_frequency",
+        hue="selected_policy_number",
+        ax=axes[1],
+    )
+    axes[1].set_title("(b) Day-bootstrap winner frequency")
+    axes[1].set_xlabel("Boundary evidence fraction q (%)")
+    axes[1].set_ylabel("Selection frequency")
+    axes[1].set_ylim(0, 1.0)
+    axes[1].legend(title="Selected policy", frameon=True, fontsize=9, title_fontsize=10)
+    fig.tight_layout()
+    fig.savefig(out)
+    plt.close(fig)
+
+
+def save_q_localized_transfer_figure(
+    transfer: pd.DataFrame,
+    out: Path,
+) -> None:
+    """Save season-three transfer for q-localized season-two selections."""
+
+    set_style()
+    fig, axes = plt.subplots(1, 2, figsize=(14.2, 5.2))
+    plot = transfer.copy()
+    plot["q_percent"] = 100.0 * plot["q"]
+    sns.scatterplot(
+        data=plot,
+        x="season2_localized_boundary_lift",
+        y="season3_full_replay_lift",
+        hue="policy_number",
+        style="selection_source",
+        s=90,
+        ax=axes[0],
+    )
+    axes[0].axhline(0, color="black", linewidth=0.8, linestyle="--")
+    axes[0].axvline(0, color="black", linewidth=0.8, linestyle="--")
+    axes[0].set_title("(a) Season-three lift of localized selections")
+    axes[0].set_xlabel("Season 2 q-localized boundary lift")
+    axes[0].set_ylabel("Season 3 full replay lift")
+    axes[0].legend(title="Policy / source", frameon=True, fontsize=9, title_fontsize=10)
+
+    sns.lineplot(
+        data=plot,
+        x="q_percent",
+        y="season3_full_replay_lift",
+        hue="policy_number",
+        marker="o",
+        ax=axes[1],
+    )
+    axes[1].axhline(0, color="black", linewidth=0.8, linestyle="--")
+    axes[1].set_title("(b) Out-of-time lift by q")
+    axes[1].set_xlabel("Boundary evidence fraction q (%)")
+    axes[1].set_ylabel("Season 3 full replay lift")
+    axes[1].legend(title="Policy", frameon=True, fontsize=9, title_fontsize=10)
+    fig.tight_layout()
+    fig.savefig(out)
+    plt.close(fig)
+
+
 def save_decision_ablation(ablation: pd.DataFrame, out: Path) -> None:
     set_style()
     plot = ablation.copy()
